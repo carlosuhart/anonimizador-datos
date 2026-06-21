@@ -81,10 +81,10 @@ python anonimizar.py --lista-leyes
 | `rgpd`      | RGPD/GDPR 2016/679 (UE)                       | DNI, NIE, teléfonos ES             |
 | `chile`     | Ley 21.719 + Ley 19.628 (Chile)               | RUT/RUN, teléfonos CL              |
 | `brasil`    | LGPD Lei 13.709/2018 (Brasil)                 | CPF, CNPJ, teléfonos BR            |
-| `mexico`    | LFPDPPP 2010 (México)                         | CURP, RFC, teléfonos MX            |
+| `mexico`    | LFPDPPP 2010/2025 (México)                    | CURP, RFC, teléfonos MX            |
 | `colombia`  | Ley 1581/2012 + Decreto 1377/2013 (Colombia)  | NIT, CC con contexto, teléfonos CO |
 | `argentina` | Ley 25.326 (Argentina)                        | DNI, CUIT/CUIL, teléfonos AR       |
-| `uk`        | UK GDPR / Data Protection Act 2018            | NINO, teléfonos UK                 |
+| `uk`        | UK GDPR / DPA 2018 / DUAA 2025               | NINO, teléfonos UK                 |
 | `ccpa`      | CCPA/CPRA (California, EE.UU.)                | SSN, DL californiano, teléfonos US |
 
 Entidades detectadas en **todas** las jurisdicciones (universales):
@@ -128,12 +128,13 @@ Entidades detectadas en **todas** las jurisdicciones (universales):
 
 ## Notas legales por jurisdicción
 
-### Chile — Ley 21.719 (2023)
-La Ley 21.719 moderniza la Ley 19.628. Publicada en diciembre 2023; vigencia
-plena de la mayoría de sus disposiciones a partir de 2026. Amplía las
-categorías de datos sensibles (biométricos, geolocalización continua, datos
-de menores) e introduce la figura del Delegado de Protección de Datos.
-El RUT es el identificador nacional único para personas naturales y jurídicas.
+### Chile — Ley 21.719 (2024)
+La Ley 21.719 fue publicada el 13 de diciembre de 2024 y entra en vigencia
+el 1 de diciembre de 2026, sustituyendo íntegramente la Ley 19.628 de 1999.
+Crea la APDP (Agencia de Protección de Datos Personales) como organismo autónomo
+con potestad sancionadora de hasta 20.000 UTM (~1.400 millones CLP). Amplía datos
+sensibles (biométricos, geolocalización continua, datos de menores) e introduce el
+Delegado de Protección de Datos. El RUT es el identificador nacional único.
 
 ### Brasil — LGPD (Lei 13.709/2018)
 En vigor desde agosto 2020. Exige base legal explícita para cada tratamiento,
@@ -141,11 +142,15 @@ aplica a datos de personas en Brasil independientemente de dónde se procesen.
 El CPF identifica a personas físicas; el CNPJ a personas jurídicas. La ANPD
 (Autoridade Nacional de Proteção de Dados) es el organismo de control.
 
-### México — LFPDPPP (2010)
-Aplica al sector privado. El sector público se rige por la Ley General de
-Protección de Datos Personales en Posesión de Sujetos Obligados (2017).
-El CURP identifica a personas físicas (18 chars); el RFC se usa para
-obligaciones fiscales (persona física: 13 chars, moral: 12 chars).
+### México — LFPDPPP 2010/2025
+La ley original data de 2010. Una reforma constitucional de noviembre 2024
+eliminó el INAI como autoridad de control. La ley reformada entró en vigor el
+21 de marzo de 2025; la nueva autoridad es la SABG (Secretaría Anticorrupción
+y Buen Gobierno). La reforma añade obligaciones sobre decisiones automatizadas
+e inteligencia artificial. Aplica al sector privado. El sector público se rige
+por la Ley General de Protección de Datos Personales en Posesión de Sujetos
+Obligados (2017). El CURP identifica a personas físicas (18 chars); el RFC se
+usa para obligaciones fiscales (persona física: 13 chars, moral: 12 chars).
 
 ### Colombia — Ley 1581/2012
 Complementada por el Decreto 1377/2013. La Superintendencia de Industria y
@@ -158,18 +163,26 @@ La AAIP (Agencia de Acceso a la Información Pública) es el organismo de
 control. Proyecto de reforma PIDIA en tramitación parlamentaria (junio 2026,
 aún no aprobado). El CUIT/CUIL incluye el tipo de persona y dígito verificador.
 
-### UK — UK GDPR / DPA 2018
-El ICO (Information Commissioner's Office) es la autoridad supervisora.
-Post-Brexit, el UK GDPR es equivalente en estructura al RGPD de la UE pero
-con divergencias crecientes. El NINO (National Insurance Number) es el
-identificador de prestaciones sociales y fiscales.
+### UK — UK GDPR / DPA 2018 / DUAA 2025
+El marco legal UK consta de tres instrumentos: UK GDPR (en vigor 1 enero 2021),
+Data Protection Act 2018, y Data (Use and Access) Act 2025 (DUAA), con Royal
+Assent el 19/06/2025 y disposiciones principales en vigor desde el 5 de febrero
+de 2026. La DUAA introduce divergencias materiales respecto al RGPD de la UE:
+exención de cookies analíticas de consentimiento, recognised legitimate interests
+sin test de balance, y mecanismo stop-the-clock en solicitudes de acceso.
+Autoridad supervisora: ICO. La Comisión Europea renovó la decisión de adecuación
+del UK hasta diciembre 2031. El NINO es el identificador de prestaciones y fiscal.
 
 ### CCPA / CPRA — California (EE.UU.)
 La CCPA (2018) y su extensión CPRA (vigente desde enero 2023) aplican a
 empresas con facturación > 25M USD anuales, o que traten datos de ≥ 100.000
-consumidores californianos, o que deriven ≥ 50% de ingresos de la venta de
-datos. El CPPA (California Privacy Protection Agency) es el organismo de
-aplicación. No existe ley federal equivalente en EE.UU.
+consumidores californianos, o que deriven ≥ 50% de ingresos de la venta de datos.
+El CPPA (California Privacy Protection Agency) es el organismo de aplicación.
+Regulaciones adicionales aprobadas en septiembre 2025, en vigor desde el 1 de
+enero de 2026: datos neurales añadidos como datos sensibles; datos de menores
+de 16 años clasificados automáticamente como sensibles; obligación de honrar
+señales GPC (Global Privacy Control) como opt-out válido.
+No existe ley federal equivalente en EE.UU.
 
 ---
 

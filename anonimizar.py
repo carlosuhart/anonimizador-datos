@@ -5,11 +5,11 @@
 #   rgpd      — UE (RGPD/GDPR 2016/679)
 #   chile     — Ley 21.719 / Ley 19.628 (Chile)
 #   brasil    — LGPD Lei 13.709/2018 (Brasil)
-#   mexico    — LFPDPPP 2010 (México)
+#   mexico    — LFPDPPP 2010/2025 (México)
 #   colombia  — Ley 1581/2012 + Decreto 1377/2013 (Colombia)
 #   argentina — Ley 25.326 (Argentina)
-#   uk        — UK GDPR / Data Protection Act 2018
-#   ccpa      — CCPA/CPRA (California, EE.UU.)
+#   uk        — UK GDPR / DPA 2018 / DUAA 2025
+#   ccpa      — CCPA/CPRA + regs. enero 2026 (California, EE.UU.)
 #   todo      — Activa todas las jurisdicciones simultáneamente
 #
 # Uso:
@@ -66,10 +66,10 @@ parser.add_argument(
         "  rgpd       UE — RGPD/GDPR 2016/679\n"
         "  chile      Chile — Ley 21.719 / 19.628\n"
         "  brasil     Brasil — LGPD Lei 13.709/2018\n"
-        "  mexico     México — LFPDPPP 2010\n"
+        "  mexico     México — LFPDPPP 2010/2025\n"
         "  colombia   Colombia — Ley 1581/2012\n"
         "  argentina  Argentina — Ley 25.326\n"
-        "  uk         UK GDPR / Data Protection Act 2018\n"
+        "  uk         UK GDPR / DPA 2018 / DUAA 2025\n"
         "  ccpa       California — CCPA/CPRA\n"
         "  todo       Activa todas las anteriores\n"
     )
@@ -244,9 +244,12 @@ def activar_rgpd():
 # ── Chile — Ley 21.719 ────────────────────────────────────────────────────────
 # RUT/RUN: hasta 8 dígitos + guion + dígito verificador (0-9 o K/k).
 # Formato habitual: 12.345.678-9 o 12345678-9. También sin puntos: 12345678K.
-# La Ley 21.719 (publicada diciembre 2023, vigencia plena 2026) amplía las
-# categorías de datos sensibles e introduce nuevas obligaciones para responsables
-# y encargados. El RUT sigue siendo el identificador nacional único.
+# La Ley 21.719 fue publicada el 13 de diciembre de 2024 y entra en vigencia
+# el 1 de diciembre de 2026. Sustituye íntegramente la Ley 19.628 de 1999.
+# Crea la APDP (Agencia de Protección de Datos Personales) como autoridad
+# autónoma. Amplía datos sensibles (biométricos, geolocalización continua,
+# datos de menores) e introduce sanciones de hasta 20.000 UTM.
+# El RUT sigue siendo el identificador nacional único.
 
 def activar_chile():
     patrones_rut = [
@@ -315,10 +318,14 @@ def activar_brasil():
     print("  [Brasil — LGPD] Reconocedores CPF, CNPJ + teléfonos BR activados.")
 
 
-# ── México — LFPDPPP ──────────────────────────────────────────────────────────
+# ── México — LFPDPPP 2010/2025 ────────────────────────────────────────────────
 # CURP: identificador de 18 caracteres alfanuméricos (persona física).
 # RFC: identificador fiscal. Persona física: 13 chars. Persona moral: 12 chars.
-# La LFPDPPP (2010) y su reglamento rigen el tratamiento de datos en el sector privado.
+# La LFPDPPP original data de 2010. Una reforma constitucional de noviembre 2024
+# eliminó el INAI (autoridad de control). La ley reformada entró en vigor el
+# 21 de marzo de 2025; la nueva autoridad de control es la SABG (Secretaría
+# Anticorrupción y Buen Gobierno). Incorpora obligaciones sobre decisiones
+# automatizadas e inteligencia artificial.
 # Para sector público: Ley General de Protección de Datos (2017).
 
 def activar_mexico():
@@ -429,9 +436,15 @@ def activar_argentina():
     print("  [Argentina — Ley 25.326] Reconocedores DNI, CUIT/CUIL + teléfonos AR activados.")
 
 
-# ── UK — UK GDPR / DPA 2018 ───────────────────────────────────────────────────
+# ── UK — UK GDPR / DPA 2018 / DUAA 2025 ──────────────────────────────────────
 # National Insurance Number (NINO): formato AA 99 99 99 A (7 chars sin espacios: AA999999A).
-# El UK GDPR entró en vigor post-Brexit el 1 enero 2021, idéntico en estructura al RGPD.
+# El marco legal UK consta de tres instrumentos: UK GDPR (en vigor 1 enero 2021),
+# Data Protection Act 2018, y Data (Use and Access) Act 2025 (Royal Assent
+# 19/06/2025, disposiciones principales en vigor 5 febrero 2026).
+# La DUAA 2025 introduce divergencias materiales respecto al RGPD de la UE:
+# exención de cookies analíticas de consentimiento, recognized legitimate interests
+# sin test de balance, y mecanismo stop-the-clock en solicitudes de acceso.
+# La Comisión Europea renovó la decisión de adecuación del UK hasta diciembre 2031.
 
 def activar_uk():
     patrones_nino = [
@@ -459,8 +472,12 @@ def activar_uk():
 # ── CCPA / CPRA — California ──────────────────────────────────────────────────
 # Social Security Number (SSN): XXX-XX-XXXX.
 # California Driver's License: letra + 7 dígitos.
-# La CCPA (2018) y su extensión CPRA (2020, vigente 2023) aplican a empresas que
-# operan en California con umbrales de ingresos o volúmenes de datos específicos.
+# La CCPA (2018) y su extensión CPRA (2020, vigente enero 2023) aplican a empresas
+# con >$25M de facturación, ≥100.000 consumidores o ≥50% ingresos de datos.
+# Regulaciones adicionales aprobadas por la CPPA en septiembre 2025, en vigor
+# desde el 1 de enero de 2026: datos neurales incorporados como datos sensibles,
+# datos de menores <16 clasificados automáticamente como sensibles, obligación
+# de honrar señales GPC (Global Privacy Control) como opt-out válido.
 
 def activar_ccpa():
     patrones_ssn = [

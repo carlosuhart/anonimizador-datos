@@ -31,10 +31,13 @@ AI tools and need a clean, auditable anonymization step before exporting files.
 
 **Key:** `chile`
 
-Ley 21.719 (published December 2023, full enforcement from 2026) modernizes Ley 19.628.
-Introduces a Data Protection Delegate, expands sensitive data categories (biometric,
-continuous geolocation, data of minors under 14), and applies extraterritorially
-to processing that affects people in Chile.
+Ley 21.719 was published on 13 December 2024 and enters into full force on
+1 December 2026, replacing Ley 19.628 entirely. Creates the APDP (Agencia de
+Protección de Datos Personales) as an autonomous enforcement authority with powers
+to investigate, fine (up to 20,000 UTM), and suspend processing. Expands sensitive
+data categories (biometric, continuous geolocation, data of minors under 14) and
+introduces a Data Protection Delegate requirement. Applies extraterritorially to
+processing that affects people in Chile.
 
 - **RUT/RUN** with dots: `12.345.678-9` → `<RUT-CL>`
 - **RUT/RUN** without dots: `12345678-K` → `<RUT-CL>`
@@ -60,9 +63,14 @@ regardless of where the organization is located. Supervisory authority: ANPD.
 
 **Key:** `mexico`
 
-Applies to the private sector. The public sector is governed by the separate
+Original law enacted in 2010. A November 2024 constitutional reform eliminated
+the INAI (the former data protection authority). A reformed LFPDPPP entered into
+force on 21 March 2025, designating the SABG (Secretaría Anticorrupción y Buen
+Gobierno) as the new supervisory authority. The 2025 reform adds obligations
+around automated decision-making and AI — one of the first in Latin America to
+do so directly in statute. Implementing regulations were under stakeholder
+consultation as of early 2026. The public sector is governed by the separate
 Ley General de Protección de Datos en Posesión de Sujetos Obligados (2017).
-Supervisory authority: INAI.
 
 - **CURP** (18-char alphanumeric): `PELJ800101HDFRRN09` → `<CURP-MX>`
 - **RFC** persona física (13 chars): `PELJ800101XX9` → `<RFC-MX>`
@@ -100,12 +108,18 @@ due to high false-positive risk from bare number sequences.
 
 ---
 
-### UK — UK GDPR / Data Protection Act 2018
+### UK — UK GDPR / DPA 2018 / DUAA 2025
 
 **Key:** `uk`
 
-UK GDPR entered into force on 1 January 2021 (post-Brexit). Structurally
-identical to EU GDPR but with growing divergences. Supervisory authority: ICO.
+The UK framework now comprises three instruments: UK GDPR (in force 1 January
+2021), Data Protection Act 2018, and the Data (Use and Access) Act 2025 (DUAA),
+which received Royal Assent on 19 June 2025 with its main provisions in force
+from 5 February 2026. The DUAA introduced the first material divergences from
+EU GDPR: analytics cookies exempt from consent, a recognised-legitimate-interests
+schedule (no balancing test required), and a stop-the-clock mechanism for subject
+access requests. Supervisory authority: ICO. The EU renewed the UK adequacy
+decision until December 2031.
 
 - **NINO** (National Insurance Number): `AB 12 34 56 C` → `<NINO-UK>`
 - UK phones: `+44`, `0044`, or leading `0` formats
@@ -119,8 +133,12 @@ identical to EU GDPR but with growing divergences. Supervisory authority: ICO.
 CCPA (2018) extended by CPRA (in force January 2023). Applies to for-profit
 businesses meeting any of: >$25M annual revenue; ≥100,000 consumers' data
 processed; ≥50% revenue from selling data. Supervisory authority: CPPA.
-California DL pattern (`[A-Z]\d{7}`) has score 0.70 — review output manually
-if documents contain unrelated alphanumeric codes.
+New CPPA regulations approved September 2025 and in force since 1 January 2026:
+neural data added as sensitive personal information; data of consumers under 16
+automatically classified as sensitive; Global Privacy Control (GPC) signals must
+be honoured as a valid opt-out from sale/sharing. California DL pattern
+(`[A-Z]\d{7}`) has score 0.70 — review output manually if documents contain
+unrelated alphanumeric codes.
 
 - **SSN**: `123-45-6789` → `<SSN-US>`
 - **California Driver's License**: `A1234567` → `<DL-US>`
