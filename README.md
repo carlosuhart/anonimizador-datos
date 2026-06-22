@@ -314,7 +314,42 @@ It works with any combination, as long as at least one model is available.
 
 ---
 
+## Using it as a Claude Code skill
+
+Once `SKILL.md` is installed (see [Claude Code skill](#claude-code-skill) below),
+you drive the whole round-trip in natural language — no flags to remember. The
+skill reads your phrasing, picks the mode and jurisdiction, and runs the script
+for you.
+
+| You type | The skill runs |
+|----------|----------------|
+| `/anonimizar contactos.csv` | `anonimizar.py contactos.csv --ley todo` |
+| `/anonimizar C:/exports/` | anonymizes every supported file in the folder |
+| `/anonimizar informe.docx para rgpd` | `--ley rgpd` (jurisdiction parsed from "para rgpd") |
+| `/anonimizar datos.xlsx solo para Chile` | `--ley chile` |
+| `/anonimizar restaurar contactos_anon.csv` | `anonimizar.py contactos_anon.csv --restaurar` |
+| `/anonimizar restaurar C:/anon/` | restores every token-bearing file in the folder |
+
+Defaults that make it zero-config:
+
+- **No jurisdiction needed.** Without one, it runs `--ley todo` (all frameworks at
+  once) so the output is safe under every supported regulation. Naming a jurisdiction
+  in plain language (`para rgpd`, `solo Chile`, `LGPD`) just narrows it.
+- **Mode is inferred.** Any phrasing with "restaurar" / "desanonimizar" / "revertir"
+  triggers restoration; anything else anonymizes.
+- **The map is found automatically** on restore — exact `[file].key.json`, or the
+  single `.key.json` in the folder (which is how an AI-returned file with a
+  different name still gets restored).
+
+The end-to-end skill flow is exactly the round-trip above: `/anonimizar file` →
+hand the `_anon` output to an AI → `/anonimizar restaurar result`.
+
+---
+
 ## Usage
+
+The commands below are the raw CLI the skill wraps — use them directly if you are
+not running inside Claude Code.
 
 ### Anonymization
 
