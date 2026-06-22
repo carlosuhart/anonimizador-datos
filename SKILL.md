@@ -183,6 +183,7 @@ Numerados por tipo, reutilizados si el mismo valor aparece varias veces:
 ## Limitaciones conocidas
 
 - **Precisión NER:** spaCy puede generar falsos positivos en nombres comunes (saludos, títulos). El script filtra los más frecuentes en español.
+- **Ubicaciones según contexto:** una ubicación solo se anonimiza si hay una persona cerca. En texto libre (.md, .docx), "cerca" es ≤120 caracteres en la misma línea/párrafo. En tablas (.csv, .xlsx) el contexto es la **fila**: si cualquier celda de la fila tiene un nombre, las ubicaciones de las demás columnas también se anonimizan; una tabla sin personas deja las ubicaciones intactas. Los exports de Screaming Frog se tratan como texto libre por celda.
 - **Cédula colombiana:** se detecta solo con contexto previo (`C.C.`, `cédula`, `documento`).
 - **DNI argentino sin puntos:** score 0,55 — revisar salida si hay códigos numéricos en el archivo.
 - **CPF brasileño sin formato:** score 0,60 — usar formato con puntos y guiones si es posible.

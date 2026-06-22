@@ -450,6 +450,7 @@ The skill is invocation-only — it does not auto-trigger.
 ## Known limitations
 
 - **NER false positives**: spaCy may tag common Spanish words (greetings, titles) as person names. The script filters the most frequent ones; the rest appear in output.
+- **Location detection is context-aware**: a location is only anonymized when a person is present nearby. In free text (`.md`, `.docx`) "nearby" means within ~120 characters in the same line/paragraph. In tables (`.csv`, `.xlsx`) the **row** is the context: if any cell in the row holds a person name, locations in the other columns are anonymized too; a table with no person names leaves bare locations untouched (avoids flagging cities in a product/inventory list). Screaming Frog exports are treated as free text per cell.
 - **Colombian CC (cédula)**: bare 6–10 digit sequences produce too many false positives. Detection is activated only when preceded by `C.C.`, `cédula`, or `documento`.
 - **Argentine DNI without dots**: confidence score 0.55. Any 7–8 digit sequence qualifies. Manually review output when documents contain numeric codes (order IDs, product SKUs).
 - **Brazilian CPF without formatting**: confidence 0.60 for bare 11-digit sequences. Formatted input (`123.456.789-09`) scores 0.95.

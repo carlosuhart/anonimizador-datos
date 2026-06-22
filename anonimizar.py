@@ -727,9 +727,15 @@ def _normalizar_mayusculas(texto: str) -> str:
     return texto.title() if prop > 0.5 else texto
 
 
-def anonimizar_texto(texto: str) -> str:
+def _detectar_spans(texto: str):
+    """
+    Analiza un texto y devuelve sus spans de PII ya depurados de falsos positivos
+    de PERSON y de solapamientos. NO aplica el filtro de proximidad de LOCATION:
+    devuelve todas las ubicaciones detectadas para que la decisión de conservarlas
+    se tome fuera (a nivel de texto libre o a nivel de fila en datos tabulares).
+    """
     if not texto or not texto.strip():
-        return texto
+        return []
 
     texto_para_analisis = _normalizar_mayusculas(texto)
     idioma = _detectar_idioma(texto_para_analisis)
@@ -740,6 +746,7 @@ def anonimizar_texto(texto: str) -> str:
         language=idioma
     )
 
+    # Descartar falsos positivos de PERSON
     resultados = [
         r for r in resultados
         if not (
@@ -748,19 +755,12 @@ def anonimizar_texto(texto: str) -> str:
         )
     ]
 
-    personas = [r for r in resultados if r.entity_type == "PERSON"]
-    resultados = [
-        r for r in resultados
-        if r.entity_type != "LOCATION" or any(
-            abs(r.start - p.end) <= 120 or abs(p.start - r.end) <= 120
-            for p in personas
-        )
-    ]
-
+    # EMAIL_ADDRESS tiene prioridad sobre URL cuando se solapan
     for r in resultados:
         if r.entity_type == "EMAIL_ADDRESS":
             r.score = 1.0
 
+    # Eliminar solapamientos: conservar la entidad con mayor score
     resultados_sin_solapamiento = []
     for r in sorted(resultados, key=lambda x: x.score, reverse=True):
         solapado = any(
@@ -770,23 +770,95 @@ def anonimizar_texto(texto: str) -> str:
         if not solapado:
             resultados_sin_solapamiento.append(r)
 
-    resultados = sorted(resultados_sin_solapamiento, key=lambda r: r.start, reverse=True)
+    return resultados_sin_solapamiento
 
+
+def _filtrar_ubicaciones_por_proximidad(texto: str, resultados: list) -> list:
+    """Conserva una LOCATION solo si hay una PERSON a <=120 caracteres en el
+    mismo texto analizado. Usado en texto libre (.md, .docx) para descartar
+    ubicaciones sueltas que spaCy detecta pero que no son PII por sí solas."""
+    personas = [r for r in resultados if r.entity_type == "PERSON"]
+    return [
+        r for r in resultados
+        if r.entity_type != "LOCATION" or any(
+            abs(r.start - p.end) <= 120 or abs(p.start - r.end) <= 120
+            for p in personas
+        )
+    ]
+
+
+def _aplicar_tokens(texto: str, resultados: list) -> str:
+    """Reemplaza los spans dados por tokens numerados, de mayor a menor posición
+    para no invalidar los índices, actualizando el mapa global."""
     texto_anon = texto
-    for resultado in resultados:
+    for resultado in sorted(resultados, key=lambda r: r.start, reverse=True):
         valor_original = texto[resultado.start:resultado.end]
         token = _token_para(resultado.entity_type, valor_original)
         texto_anon = texto_anon[:resultado.start] + token + texto_anon[resultado.end:]
-
     return texto_anon
+
+
+def anonimizar_texto(texto: str) -> str:
+    """Anonimiza un texto libre (línea o párrafo). La proximidad de LOCATION se
+    evalúa dentro del propio texto."""
+    if not texto or not texto.strip():
+        return texto
+    resultados = _detectar_spans(texto)
+    resultados = _filtrar_ubicaciones_por_proximidad(texto, resultados)
+    return _aplicar_tokens(texto, resultados)
+
+
+def anonimizar_fila(celdas: list) -> list:
+    """
+    Anonimiza las celdas de una fila tabular tratando la fila como una unidad de
+    contexto: si cualquier celda de la fila contiene un nombre de persona, las
+    ubicaciones del resto de celdas de esa fila también se anonimizan (la ciudad
+    de una persona en otra columna es dato personal por combinación). Si la fila
+    no contiene ninguna persona, se descartan las ubicaciones sueltas.
+    Solo se analiza cada celda una vez (sin coste NLP adicional por fila).
+    """
+    analizadas = []  # (texto_original, spans) por celda; None si no es str
+    fila_tiene_persona = False
+    for celda in celdas:
+        if isinstance(celda, str) and celda.strip():
+            spans = _detectar_spans(celda)
+            if any(r.entity_type == "PERSON" for r in spans):
+                fila_tiene_persona = True
+            analizadas.append((celda, spans))
+        else:
+            analizadas.append(None)
+
+    salida = []
+    for celda, item in zip(celdas, analizadas):
+        if item is None:
+            salida.append(celda)
+            continue
+        texto, spans = item
+        if not fila_tiene_persona:
+            spans = _filtrar_ubicaciones_por_proximidad(texto, spans)
+        salida.append(_aplicar_tokens(texto, spans))
+    return salida
 
 # =============================================================================
 # PARTE 8: Procesadores por formato de archivo
 # =============================================================================
 
+def _anonimizar_df_por_filas(df):
+    """Aplica anonimizar_fila a cada fila del DataFrame, preservando columnas
+    e índices. La fila es la unidad de contexto para las ubicaciones."""
+    if df.empty:
+        return df
+    return df.apply(
+        lambda fila: pd.Series(anonimizar_fila(list(fila)), index=fila.index),
+        axis=1,
+    )
+
+
 def procesar_csv(ruta_entrada: str, ruta_salida: str):
     df = pd.read_csv(ruta_entrada, dtype=str)
     if es_archivo_screaming_frog(df):
+        # Un export de Screaming Frog no es una tabla de personas: cada celda
+        # (title, meta, h1...) es un texto libre independiente, sin contexto de fila.
         print("  Detectado formato Screaming Frog — procesando solo columnas de texto libre.")
         for columna in df.columns:
             if columna.lower() in COLUMNAS_TEXTO_SF:
@@ -794,7 +866,7 @@ def procesar_csv(ruta_entrada: str, ruta_salida: str):
                     lambda c: anonimizar_texto(c) if isinstance(c, str) else c
                 )
     else:
-        df = df.map(lambda c: anonimizar_texto(c) if isinstance(c, str) else c)
+        df = _anonimizar_df_por_filas(df)
     df.to_csv(ruta_salida, index=False)
     print(f"  CSV guardado: {ruta_salida}")
 
@@ -803,8 +875,7 @@ def procesar_xlsx(ruta_entrada: str, ruta_salida: str):
     hojas = pd.read_excel(ruta_entrada, sheet_name=None, dtype=str)
     hojas_anon = {}
     for nombre, df in hojas.items():
-        df = df.map(lambda c: anonimizar_texto(c) if isinstance(c, str) else c)
-        hojas_anon[nombre] = df
+        hojas_anon[nombre] = _anonimizar_df_por_filas(df)
     with pd.ExcelWriter(ruta_salida, engine="openpyxl") as writer:
         for nombre, df in hojas_anon.items():
             df.to_excel(writer, sheet_name=nombre, index=False)
