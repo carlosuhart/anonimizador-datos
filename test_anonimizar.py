@@ -42,9 +42,15 @@ IDENTIFICADORES = {
 
 
 def _run(args, cwd=DIR):
+    # Fixtures en español: cargar solo el modelo es acelera cada subprocess ~3x.
+    # stdin=DEVNULL: ejecución no interactiva (como la de un agente). Evita que
+    # getpass quede esperando input al restaurar un mapa cifrado sin clave.
+    env = dict(os.environ, ANON_IDIOMAS="es")
+    env.pop("ANON_CLAVE", None)
     return subprocess.run(
         [sys.executable, SCRIPT, *args],
-        cwd=cwd, capture_output=True, text=True,
+        cwd=cwd, capture_output=True, text=True, env=env,
+        stdin=subprocess.DEVNULL,
     )
 
 
@@ -139,6 +145,96 @@ class TestCifrado(unittest.TestCase):
         restaurado = os.path.join(self.tmp, "datos_anon_restaurado.csv")
         with open(restaurado, encoding="utf-8") as f:
             self.assertIn("12345678Z", f.read())
+
+
+class TestDeteccionYFormatos(unittest.TestCase):
+    """Cubre lo frágil: NER de nombres, formatos .md/.docx end-to-end,
+    contexto de ubicación por fila y ausencia de falsos positivos. Todos los
+    archivos se anonimizan en UNA invocación (--ley rgpd) para una sola carga."""
+
+    @classmethod
+    def setUpClass(cls):
+        from docx import Document
+        cls.tmp = tempfile.mkdtemp(prefix="anon_cob_")
+        p = lambda n: os.path.join(cls.tmp, n)
+
+        # .md con nombre (NER) + dirección
+        cls.md = p("nota.md")
+        with open(cls.md, "w", encoding="utf-8") as f:
+            f.write("Cita con Juan García en la Calle Mayor 3 el lunes.\n")
+
+        # .docx con nombre (NER) + DNI, nombre partido en dos runs
+        cls.docx = p("informe.docx")
+        doc = Document()
+        par = doc.add_paragraph()
+        par.add_run("Paciente: María ")
+        par.add_run("López, DNI 12345678Z")
+        doc.save(cls.docx)
+
+        # CSV con persona + ciudad (la ciudad debe anonimizarse por contexto de fila)
+        cls.csv_pers = p("personas.csv")
+        with open(cls.csv_pers, "w", encoding="utf-8") as f:
+            f.write("nombre,ciudad\nAna Ruiz,Sevilla\n")
+
+        # CSV sin personas: la ciudad NO debe tocarse (evita falso positivo)
+        cls.csv_inv = p("inventario.csv")
+        with open(cls.csv_inv, "w", encoding="utf-8") as f:
+            f.write("producto,region\nTeclado,Sevilla\n")
+
+        # CSV con un código numérico no personal: no debe tokenizarse con rgpd
+        cls.csv_sku = p("pedidos.csv")
+        with open(cls.csv_sku, "w", encoding="utf-8") as f:
+            f.write("detalle\nPedido 4521 procesado\n")
+
+        cls.res = _run([cls.md, cls.docx, cls.csv_pers, cls.csv_inv, cls.csv_sku, "--ley", "rgpd"])
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def _leer(self, ruta):
+        with open(ruta, encoding="utf-8") as f:
+            return f.read()
+
+    def test_proceso_ok(self):
+        self.assertEqual(self.res.returncode, 0, self.res.stderr)
+
+    def test_md_nombre_y_direccion(self):
+        out = self._leer(os.path.join(self.tmp, "nota_anon.md"))
+        self.assertNotIn("Juan García", out, "nombre no detectado en .md")
+        self.assertNotIn("Calle Mayor 3", out, "dirección no detectada en .md")
+
+    def test_docx_nombre_partido_y_dni(self):
+        from docx import Document
+        out = " ".join(p.text for p in Document(os.path.join(self.tmp, "informe_anon.docx")).paragraphs)
+        self.assertNotIn("María López", out, "nombre partido en runs no detectado en .docx")
+        self.assertNotIn("12345678Z", out, "DNI no detectado en .docx")
+
+    def test_ciudad_con_persona_se_anonimiza(self):
+        out = self._leer(os.path.join(self.tmp, "personas_anon.csv"))
+        self.assertNotIn("Sevilla", out, "ciudad junto a persona no anonimizada (contexto de fila)")
+
+    def test_ciudad_sin_persona_intacta(self):
+        out = self._leer(os.path.join(self.tmp, "inventario_anon.csv"))
+        self.assertIn("Sevilla", out, "ciudad sin persona NO debería anonimizarse")
+
+    def test_codigo_no_es_falso_positivo(self):
+        out = self._leer(os.path.join(self.tmp, "pedidos_anon.csv"))
+        self.assertIn("4521", out, "un código numérico no personal no debe tokenizarse con rgpd")
+
+    def test_roundtrip_md(self):
+        r = _run([os.path.join(self.tmp, "nota_anon.md"), "--restaurar"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(self._leer(os.path.join(self.tmp, "nota_anon_restaurado.md")),
+                         self._leer(self.md))
+
+    def test_roundtrip_docx(self):
+        from docx import Document
+        r = _run([os.path.join(self.tmp, "informe_anon.docx"), "--restaurar"])
+        self.assertEqual(r.returncode, 0, r.stderr)
+        out = " ".join(p.text for p in Document(os.path.join(self.tmp, "informe_anon_restaurado.docx")).paragraphs)
+        self.assertIn("María López", out)
+        self.assertIn("12345678Z", out)
 
 
 if __name__ == "__main__":

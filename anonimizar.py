@@ -115,13 +115,46 @@ parser.add_argument(
     "--clave", metavar="PASSPHRASE",
     help=(
         "Clave para cifrar (--cifrar-mapa) o descifrar (--restaurar) el mapa.\n"
-        "Alternativa: variable de entorno ANON_CLAVE."
+        "MENOS SEGURO: queda en el historial del shell y en la lista de procesos.\n"
+        "Preferible: variable de entorno ANON_CLAVE (no deja rastro en argv)."
+    )
+)
+parser.add_argument(
+    "--pedir-clave", action="store_true",
+    help=(
+        "Pide la clave por terminal de forma interactiva (sin dejar rastro).\n"
+        "Solo para uso interactivo: nunca usar en ejecución automatizada."
     )
 )
 args = parser.parse_args()
 
-# Clave efectiva: prioriza --clave, cae a ANON_CLAVE
-CLAVE_MAPA = args.clave or os.environ.get("ANON_CLAVE")
+# Resolución de la clave del mapa. Orden de preferencia (de menos a más seguro):
+#   1. --clave (argv)  — cómodo pero queda en historial/procesos
+#   2. ANON_CLAVE      — variable de entorno
+#   3. getpass         — petición interactiva por terminal (no deja rastro)
+# En entornos no interactivos (sin TTY, p.ej. ejecución por un agente) se usan
+# solo 1 y 2; si no hay clave, el llamador decide cómo fallar.
+_clave_cache = {"valor": None, "resuelta": False}
+
+
+def resolver_clave(confirmar: bool = False):
+    if _clave_cache["resuelta"]:
+        return _clave_cache["valor"]
+    clave = args.clave or os.environ.get("ANON_CLAVE")
+    # getpass SOLO bajo petición explícita (--pedir-clave). En Windows getpass
+    # lee de la consola por msvcrt ignorando stdin, así que en ejecución
+    # automatizada bloquearía: por eso nunca se invoca sin el flag.
+    if not clave and args.pedir_clave:
+        try:
+            import getpass
+            clave = getpass.getpass("Clave del mapa: ") or None
+            if clave and confirmar and clave != getpass.getpass("Repite la clave: "):
+                print("[ERROR] Las claves no coinciden.")
+                sys.exit(1)
+        except (EOFError, OSError, KeyboardInterrupt):
+            clave = None
+    _clave_cache.update(valor=clave, resuelta=True)
+    return clave
 
 if args.lista_leyes:
     print("Jurisdicciones disponibles:")
@@ -168,9 +201,12 @@ def descifrar_mapa_dict(sobre: dict, clave: str) -> dict:
     return json.loads(f.decrypt(sobre["datos"].encode("ascii")).decode("utf-8"))
 
 
-if args.cifrar_mapa and not CLAVE_MAPA:
-    print("[ERROR] --cifrar-mapa requiere una clave: usa --clave o la variable ANON_CLAVE.")
-    sys.exit(1)
+# Fail-fast: si se va a cifrar, resolver la clave antes de cargar los modelos.
+if args.cifrar_mapa and not args.restaurar:
+    if not resolver_clave(confirmar=True):
+        print("[ERROR] --cifrar-mapa requiere una clave: usa ANON_CLAVE, --pedir-clave "
+              "(interactivo), o --clave (menos seguro).")
+        sys.exit(1)
 
 # =============================================================================
 # PARTE 0b: Modo restauración — inicialización temprana (sin NLP)
@@ -225,13 +261,14 @@ if args.restaurar:
         with open(ruta_mapa, "r", encoding="utf-8") as f:
             datos = json.load(f)
         if datos.get("cifrado"):
-            if not CLAVE_MAPA:
+            clave = resolver_clave()
+            if not clave:
                 raise ValueError(
                     f"El mapa '{os.path.basename(ruta_mapa)}' está cifrado. "
-                    f"Indica la clave con --clave o la variable ANON_CLAVE."
+                    f"Aporta la clave con ANON_CLAVE, --pedir-clave, o --clave."
                 )
             try:
-                datos = descifrar_mapa_dict(datos, CLAVE_MAPA)
+                datos = descifrar_mapa_dict(datos, clave)
             except Exception:
                 raise ValueError("Clave incorrecta o mapa cifrado dañado: no se pudo descifrar.")
         return datos["mapa"]
@@ -431,11 +468,22 @@ MODELOS_IDIOMA = {
     "nl": "nl_core_news_lg",
 }
 
+# ANON_IDIOMAS limita qué modelos cargar (lista separada por comas, p.ej. "es" o
+# "es,en"). Cada modelo grande pesa cientos de MB; cargar solo los necesarios
+# acelera el arranque notablemente. Sin la variable, se cargan todos los instalados.
+_idiomas_pedidos = [
+    c.strip().lower() for c in os.environ.get("ANON_IDIOMAS", "").split(",") if c.strip()
+]
+if _idiomas_pedidos:
+    print(f"Modelos limitados por ANON_IDIOMAS: {', '.join(_idiomas_pedidos)}")
+
 print("Comprobando modelos de idioma disponibles:")
 modelos_cargados = []
 idiomas_disponibles = []
 
 for lang_code, model_name in MODELOS_IDIOMA.items():
+    if _idiomas_pedidos and lang_code not in _idiomas_pedidos:
+        continue
     try:
         spacy.load(model_name)
         modelos_cargados.append({"lang_code": lang_code, "model_name": model_name})
@@ -891,8 +939,9 @@ def _guardar_mapa(ruta_anon: str, archivo_origen: str):
         "advertencia": "Este archivo contiene datos personales originales. Trátalo con el mismo nivel de protección que el archivo fuente.",
         "mapa": _mapa_token_a_original.copy(),
     }
-    cifrado = bool(args.cifrar_mapa and CLAVE_MAPA)
-    contenido = cifrar_mapa_dict(datos, CLAVE_MAPA) if cifrado else datos
+    clave = resolver_clave() if args.cifrar_mapa else None
+    cifrado = bool(args.cifrar_mapa and clave)
+    contenido = cifrar_mapa_dict(datos, clave) if cifrado else datos
     with open(ruta_mapa, "w", encoding="utf-8") as f:
         json.dump(contenido, f, ensure_ascii=False, indent=2)
     carpeta = os.path.dirname(os.path.abspath(ruta_mapa))

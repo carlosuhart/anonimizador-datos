@@ -466,17 +466,24 @@ The skill is invocation-only — it does not auto-trigger.
 ## Encrypting the key map
 
 By default the `.key.json` holds the PII in plaintext. To protect it, encrypt it
-with a passphrase (AES via Fernet, key derived with PBKDF2-SHA256):
+with a passphrase (AES via Fernet, key derived with PBKDF2-SHA256). Supply the
+passphrase in order of preference:
 
 ```bash
-# Anonymize and encrypt the map
-python anonimizar.py datos.csv --ley rgpd --cifrar-mapa --clave "mi-clave-secreta"
+# Preferred — environment variable, leaves no trace in shell history/argv
+export ANON_CLAVE="mi-clave-secreta"
+python anonimizar.py datos.csv --ley rgpd --cifrar-mapa
+python anonimizar.py datos_anon.csv --restaurar
 
-# Restore — the same key is required
-python anonimizar.py datos_anon.csv --restaurar --clave "mi-clave-secreta"
+# Interactive prompt (no trace either), for terminal use only
+python anonimizar.py datos.csv --ley rgpd --cifrar-mapa --pedir-clave
+
+# Convenient but less secure — visible in shell history and process list
+python anonimizar.py datos.csv --ley rgpd --cifrar-mapa --clave "mi-clave-secreta"
 ```
 
-The passphrase can also be supplied via the `ANON_CLAVE` environment variable.
+`--pedir-clave` is opt-in by design: it is never triggered automatically, so the
+tool never blocks waiting for input in non-interactive runs (scripts, agents).
 Inside the encrypted map only the salt and KDF parameters are in clear; the map
 and the source filename are encrypted. Lose the passphrase and the map is
 unrecoverable.
@@ -503,7 +510,25 @@ that map encryption protects the PII and requires the key.
 python -m unittest test_anonimizar
 ```
 
-Requires the spaCy models installed (each anonymization loads them).
+Requires the spaCy models installed (each anonymization loads them). The suite
+sets `ANON_IDIOMAS=es` so each subprocess loads only the Spanish model, running
+in ~30 s instead of minutes.
+
+---
+
+## Performance
+
+Each invocation loads the spaCy models once (not per file), so anonymizing a
+whole folder in a single call pays the startup cost only once; restoration loads
+no models and is near-instant. To cut startup time, restrict the languages
+loaded with `ANON_IDIOMAS` (comma-separated):
+
+```bash
+ANON_IDIOMAS=es python anonimizar.py datos.csv      # Spanish only — fastest
+ANON_IDIOMAS=es,en python anonimizar.py datos.csv   # Spanish + English
+```
+
+Without the variable, all installed models load (broadest coverage, slower start).
 
 ---
 

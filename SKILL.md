@@ -160,6 +160,14 @@ python -m spacy download pt_core_news_lg   # para brasil
 
 La restauración no requiere modelos instalados.
 
+**Rendimiento:** cada ejecución carga los modelos una vez (no por archivo); procesar
+una carpeta entera en una sola invocación paga el arranque una sola vez. Para acelerar,
+limitar idiomas con `ANON_IDIOMAS` (p.ej. `ANON_IDIOMAS=es` carga solo español).
+
+**Cifrado — clave (orden de preferencia):** variable `ANON_CLAVE` (recomendado, sin rastro)
+→ `--pedir-clave` (interactivo) → `--clave` (menos seguro, queda en historial). Nunca usar
+`--pedir-clave` en ejecución automatizada: el script no lo invoca solo para no bloquearse.
+
 ---
 
 ## Qué reportar al usuario
