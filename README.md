@@ -9,8 +9,71 @@ AI tools and need a clean, auditable anonymization step before exporting files.
 
 - **Jurisdictions**: RGPD/GDPR (EU), Ley 21.719 (Chile), LGPD (Brazil), LFPDPPP (Mexico), Ley 1581 (Colombia), Ley 25.326 (Argentina), UK GDPR, CCPA/CPRA (California)
 - **Formats**: `.csv`, `.xlsx`, `.md`, `.docx`
-- **NLP engine**: [spaCy](https://spacy.io/) + [Microsoft Presidio](https://microsoft.github.io/presidio/), multilingual
+- **NLP engine**: [spaCy](https://spacy.io/) + [Microsoft Presidio](https://microsoft.github.io/presidio/), multilingual, runs entirely local — no data leaves the machine
 - **Screaming Frog aware**: auto-detects SF exports and only processes free-text columns
+- **Reversible**: every anonymization run produces a `.key.json` map for full restoration
+
+---
+
+## How it works
+
+### Anonymization
+
+```
+original.csv
+     │
+     ▼
+python anonimizar.py original.csv --ley rgpd
+     │
+     ├── spaCy + Presidio scan every cell / paragraph / line
+     │   and detect names, emails, IDs, phones, IBANs...
+     │
+     ├── Each unique value gets a numbered token
+     │   "Juan García"       →  <PERSONA-1>
+     │   "juan@mail.com"     →  <EMAIL-1>
+     │   "12345678Z"         →  <DNI-ES-1>
+     │   "Juan García" (2nd) →  <PERSONA-1>   ← same token reused
+     │
+     ├── original_anon.csv          ← file with tokens, no PII
+     └── original_anon.csv.key.json ← map {token → original value}
+```
+
+### Restoration
+
+```
+original_anon.csv  +  original_anon.csv.key.json
+     │
+     ▼
+python anonimizar.py original_anon.csv --restaurar
+     │
+     ├── Loads the .key.json map
+     ├── Replaces every token with its original value
+     │
+     └── original_anon_restaurado.csv  ← identical to the source file
+```
+
+No NLP models are loaded during restoration — it starts in under a second.
+
+### The .key.json map
+
+```json
+{
+  "version": "2.2",
+  "ley": ["rgpd"],
+  "fecha": "2026-06-21T10:00:00+00:00",
+  "archivo_origen": "original.csv",
+  "advertencia": "Este archivo contiene datos personales originales...",
+  "mapa": {
+    "<PERSONA-1>": "Juan García",
+    "<EMAIL-1>": "juan@mail.com",
+    "<DNI-ES-1>": "12345678Z"
+  }
+}
+```
+
+**The `.key.json` file contains the original PII in plaintext. Protect it with
+the same access controls as the source file. If it is lost, restoration is
+not possible.**
 
 ---
 
@@ -20,8 +83,8 @@ AI tools and need a clean, auditable anonymization step before exporting files.
 
 **Key:** `rgpd`
 
-- **DNI** (8 digits + check letter): `12345678Z` → `<DNI-ES>`
-- **NIE** (X/Y/Z + 7 digits + letter): `X1234567Z` → `<DNI-ES>`
+- **DNI** (8 digits + check letter): `12345678Z` → `<DNI-ES-N>`
+- **NIE** (X/Y/Z + 7 digits + letter): `X1234567Z` → `<DNI-ES-N>`
 - Spanish landlines and mobiles, including `+34` prefix
 - Universal: names, emails, IBAN codes, credit cards, dates, IPs, locations near names
 
@@ -39,8 +102,8 @@ data categories (biometric, continuous geolocation, data of minors under 14) and
 introduces a Data Protection Delegate requirement. Applies extraterritorially to
 processing that affects people in Chile.
 
-- **RUT/RUN** with dots: `12.345.678-9` → `<RUT-CL>`
-- **RUT/RUN** without dots: `12345678-K` → `<RUT-CL>`
+- **RUT/RUN** with dots: `12.345.678-9` → `<RUT-CL-N>`
+- **RUT/RUN** without dots: `12345678-K` → `<RUT-CL-N>`
 - Chilean mobiles (`9XXXXXXXX`) and landlines with `+56` prefix
 
 ---
@@ -53,8 +116,8 @@ In force since August 2020. Requires an explicit legal basis for each processing
 activity. Applies to any organization processing data of people in Brazil,
 regardless of where the organization is located. Supervisory authority: ANPD.
 
-- **CPF** (individual taxpayer): `123.456.789-09` → `<CPF-BR>`
-- **CNPJ** (legal entity): `12.345.678/0001-95` → `<CNPJ-BR>`
+- **CPF** (individual taxpayer): `123.456.789-09` → `<CPF-BR-N>`
+- **CNPJ** (legal entity): `12.345.678/0001-95` → `<CNPJ-BR-N>`
 - Brazilian mobiles (9-digit with DDD) and landlines with `+55` prefix
 
 ---
@@ -72,9 +135,9 @@ do so directly in statute. Implementing regulations were under stakeholder
 consultation as of early 2026. The public sector is governed by the separate
 Ley General de Protección de Datos en Posesión de Sujetos Obligados (2017).
 
-- **CURP** (18-char alphanumeric): `PELJ800101HDFRRN09` → `<CURP-MX>`
-- **RFC** persona física (13 chars): `PELJ800101XX9` → `<RFC-MX>`
-- **RFC** persona moral (12 chars): `ABC123456XX9` → `<RFC-MX>`
+- **CURP** (18-char alphanumeric): `PELJ800101HDFRRN09` → `<CURP-MX-N>`
+- **RFC** persona física (13 chars): `PELJ800101XX9` → `<RFC-MX-N>`
+- **RFC** persona moral (12 chars): `ABC123456XX9` → `<RFC-MX-N>`
 - Mexican phones with area code and `+52` prefix
 
 ---
@@ -87,8 +150,8 @@ Supervisory authority: Superintendencia de Industria y Comercio (SIC).
 The CC (cédula de ciudadanía) is only detected when preceded by `C.C.`,
 `cédula`, or `documento` to avoid false positives from bare number sequences.
 
-- **NIT** (9 digits + check digit): `123456789-1` → `<NIT-CO>`
-- **CC** with context prefix: `C.C. 1234567890` → `<DNI-ES>`
+- **NIT** (9 digits + check digit): `123456789-1` → `<NIT-CO-N>`
+- **CC** with context prefix: `C.C. 1234567890` → `<DNI-ES-N>`
 - Colombian mobiles (3XX) and landlines with `+57` prefix
 
 ---
@@ -102,8 +165,8 @@ Reform bill PIDIA was under parliamentary consideration as of June 2026 and
 had not yet been enacted. DNI without dots has a lower confidence score (0.55)
 due to high false-positive risk from bare number sequences.
 
-- **DNI** with dots: `12.345.678` → `<DNI-AR>`
-- **CUIT / CUIL**: `20-12345678-9` → `<CUIT-AR>`
+- **DNI** with dots: `12.345.678` → `<DNI-AR-N>`
+- **CUIT / CUIL**: `20-12345678-9` → `<CUIT-AR-N>`
 - Argentine phones with area code and `+54` prefix
 
 ---
@@ -121,7 +184,7 @@ schedule (no balancing test required), and a stop-the-clock mechanism for subjec
 access requests. Supervisory authority: ICO. The EU renewed the UK adequacy
 decision until December 2031.
 
-- **NINO** (National Insurance Number): `AB 12 34 56 C` → `<NINO-UK>`
+- **NINO** (National Insurance Number): `AB 12 34 56 C` → `<NINO-UK-N>`
 - UK phones: `+44`, `0044`, or leading `0` formats
 
 ---
@@ -140,36 +203,39 @@ be honoured as a valid opt-out from sale/sharing. California DL pattern
 (`[A-Z]\d{7}`) has score 0.70 — review output manually if documents contain
 unrelated alphanumeric codes.
 
-- **SSN**: `123-45-6789` → `<SSN-US>`
-- **California Driver's License**: `A1234567` → `<DL-US>`
+- **SSN**: `123-45-6789` → `<SSN-US-N>`
+- **California Driver's License**: `A1234567` → `<DL-US-N>`
 - US phones with `+1` or local format
 
 ---
 
 ## Replacement labels
 
-| Label        | Replaced entity                    | Jurisdiction        |
-|--------------|------------------------------------|---------------------|
-| `<PERSONA>`  | Person name (NER)                  | All                 |
-| `<EMAIL>`    | Email address                      | All                 |
-| `<TELEFONO>` | Phone number                       | All                 |
-| `<IBAN>`     | IBAN bank code                     | All                 |
-| `<TARJETA>`  | Credit card number                 | All                 |
-| `<FECHA>`    | Date                               | All                 |
-| `<IP>`       | IP address                         | All                 |
-| `<UBICACION>`| Location near a person name        | All                 |
-| `<DNI-ES>`   | Spanish DNI or NIE                 | RGPD                |
-| `<RUT-CL>`   | Chilean RUT / RUN                  | Chile               |
-| `<CPF-BR>`   | Brazilian CPF                      | Brasil              |
-| `<CNPJ-BR>`  | Brazilian CNPJ                     | Brasil              |
-| `<CURP-MX>`  | Mexican CURP                       | Mexico              |
-| `<RFC-MX>`   | Mexican RFC                        | Mexico              |
-| `<NIT-CO>`   | Colombian NIT                      | Colombia            |
-| `<CUIT-AR>`  | Argentine CUIT / CUIL              | Argentina           |
-| `<DNI-AR>`   | Argentine DNI                      | Argentina           |
-| `<NINO-UK>`  | UK National Insurance Number       | UK                  |
-| `<SSN-US>`   | US Social Security Number          | CCPA                |
-| `<DL-US>`    | California Driver's License        | CCPA                |
+Tokens are numbered per entity type (`N` = sequential integer starting at 1).
+The same original value always maps to the same token within a file.
+
+| Label          | Replaced entity                    | Jurisdiction        |
+|----------------|------------------------------------|---------------------|
+| `<PERSONA-N>`  | Person name (NER)                  | All                 |
+| `<EMAIL-N>`    | Email address                      | All                 |
+| `<TELEFONO-N>` | Phone number                       | All                 |
+| `<IBAN-N>`     | IBAN bank code                     | All                 |
+| `<TARJETA-N>`  | Credit card number                 | All                 |
+| `<FECHA-N>`    | Date                               | All                 |
+| `<IP-N>`       | IP address                         | All                 |
+| `<UBICACION-N>`| Location near a person name        | All                 |
+| `<DNI-ES-N>`   | Spanish DNI or NIE                 | RGPD                |
+| `<RUT-CL-N>`   | Chilean RUT / RUN                  | Chile               |
+| `<CPF-BR-N>`   | Brazilian CPF                      | Brasil              |
+| `<CNPJ-BR-N>`  | Brazilian CNPJ                     | Brasil              |
+| `<CURP-MX-N>`  | Mexican CURP                       | Mexico              |
+| `<RFC-MX-N>`   | Mexican RFC                        | Mexico              |
+| `<NIT-CO-N>`   | Colombian NIT                      | Colombia            |
+| `<CUIT-AR-N>`  | Argentine CUIT / CUIL              | Argentina           |
+| `<DNI-AR-N>`   | Argentine DNI                      | Argentina           |
+| `<NINO-UK-N>`  | UK National Insurance Number       | UK                  |
+| `<SSN-US-N>`   | US Social Security Number          | CCPA                |
+| `<DL-US-N>`    | California Driver's License        | CCPA                |
 
 ---
 
@@ -215,19 +281,23 @@ python -m spacy download nl_core_news_lg
 The script loads whichever models are installed and skips the rest with a notice.
 It works with any combination, as long as at least one model is available.
 
+> Restoration mode (`--restaurar`) does not load any NLP models and has no model requirement.
+
 ---
 
 ## Usage
+
+### Anonymization
 
 Pass files or folders directly as arguments. Output is written to the same
 location as the input with `_anon` appended to the filename. The original
 is never modified.
 
 ```bash
-# Single file — produces informe_anon.docx in the same folder
+# Single file — produces informe_anon.docx + informe_anon.docx.key.json
 python anonimizar.py informe.docx
 
-# Single file with RGPD rules
+# Single file with explicit jurisdiction
 python anonimizar.py informe.docx --ley rgpd
 
 # Multiple files
@@ -252,14 +322,27 @@ python anonimizar.py datos.csv --ley todo
 python anonimizar.py --lista-leyes
 ```
 
+### Restoration
+
+```bash
+# Auto-locate map (looks for [input].key.json in the same folder)
+python anonimizar.py datos_anon.csv --restaurar
+
+# Explicit map file
+python anonimizar.py datos_anon.csv --restaurar --mapa /secure/datos_anon.csv.key.json
+
+# Restore to a specific folder
+python anonimizar.py datos_anon.csv --restaurar --carpeta-salida C:/restored/
+```
+
 ### Output naming
 
-| Input | Output |
-|---|---|
-| `datos.csv` | `datos_anon.csv` (same folder) |
-| `informe.docx` | `informe_anon.docx` (same folder) |
-| `datos.csv --salida limpio.csv` | `limpio.csv` |
-| `C:/exports/ --carpeta-salida C:/anon/` | `C:/anon/[name]_anon.[ext]` |
+| Operation | Input | Output |
+|-----------|-------|--------|
+| Anonymize | `datos.csv` | `datos_anon.csv` + `datos_anon.csv.key.json` |
+| Anonymize | `informe.docx` | `informe_anon.docx` + `informe_anon.docx.key.json` |
+| Anonymize | `datos.csv --salida limpio.csv` | `limpio.csv` + `limpio.csv.key.json` |
+| Restore   | `datos_anon.csv` | `datos_anon_restaurado.csv` |
 
 ### Supported file formats
 
@@ -299,9 +382,9 @@ The skill is invocation-only — it does not auto-trigger.
 - **Brazilian CPF without formatting**: confidence 0.60 for bare 11-digit sequences. Formatted input (`123.456.789-09`) scores 0.95.
 - **Short texts (<4 words)**: language detection is unreliable. The script falls back to the first available model.
 - **JavaScript-rendered content**: the tool processes static file content only. It does not fetch or render URLs.
+- **Restoration fidelity**: if the same original value appears with different casing across the file, each variant is stored as a separate token and restored independently.
 
 ---
-
 
 ## License
 
@@ -316,6 +399,10 @@ Free to use, modify, and distribute. Attribution appreciated but not required.
 This repository contains no client data, no domain names, and no identifying
 information. All patterns are anonymized. The tool is designed precisely to
 help others achieve the same standard.
+
+The `.key.json` files generated during anonymization are never committed to
+this repository. Add `*.key.json` to your `.gitignore` if you work in a
+git-tracked folder.
 
 ---
 
